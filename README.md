@@ -11,4 +11,4 @@ The project aims to analyze customer churn in atelecommunications company and de
 
 ![image alt ](https://github.com/mrbhargav01/Customer-Churn-Analysis-and-Prediction/blob/96d9f810b0c33d43a18b754554b1e7a971046af8/recommendation.png)
 
-![image alt ]( )
+![image alt ](https://github.com/mrbhargav01/Customer-Churn-Analysis-and-Prediction/blob/e2659ae15d73c13d5632b0d7e6b3c5fec9fc8f95/result.png)
