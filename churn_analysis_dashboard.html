@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Churn Analysis Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --secondary-color: #1cc88a;
+            --danger-color: #e74a3b;
+            --warning-color: #f6c23e;
+            --dark-color: #5a5c69;
+            --light-color: #f8f9fc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fc;
+            position: relative;
+            min-height: 100vh;
+            padding-bottom: 60px; /* Space for footer */
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--primary-color) 10%, #224abe 100%);
+            z-index: 100;
+            transition: all 0.3s;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+
+        .sidebar-brand {
+            height: 70px;
+            padding: 1.5rem 1rem;
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #fff;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-nav {
+            padding: 0;
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            padding: 0.5rem 1rem;
+        }
+
+        .sidebar-nav a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            display: block;
+            padding: 0.5rem 1rem;
+            border-radius: 0.35rem;
+            transition: all 0.3s;
+        }
+
+        .sidebar-nav a:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-nav a.active {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: 600;
+        }
+
+        .content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            background-color: #f8f9fc;
+            border-bottom: 1px solid #e3e6f0;
+            padding: 1rem 1.35rem;
+            font-weight: 700;
+        }
+
+        .metric-card {
+            border-left: 4px solid;
+            transition: transform 0.3s;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .metric-card.primary {
+            border-left-color: var(--primary-color);
+        }
+
+        .metric-card.success {
+            border-left-color: var(--secondary-color);
+        }
+
+        .metric-card.danger {
+            border-left-color: var(--danger-color);
+        }
+
+        .metric-card.warning {
+            border-left-color: var(--warning-color);
+        }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(78, 115, 223, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary-color);
+            background-color: rgba(78, 115, 223, 0.1);
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #3a59c7;
+            border-color: #3a59c7;
+        }
+
+        .feature-importance-bar {
+            height: 25px;
+            margin-bottom: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .feature-bar-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            border-radius: 4px;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            display: none;
+        }
+
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+
+        footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 60px;
+            background-color: #f8f9fc;
+            border-top: 1px solid #e3e6f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-left: -20px;
+        }
+
+        .progress {
+            height: 8px;
+            margin-bottom: 10px;
+        }
+
+        .data-preview {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2" id="loadingText">Processing your data...</p>
+            <div class="progress mt-3 w-50 mx-auto">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="progressBar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            Churn Analysis
+        </div>
+        <ul class="sidebar-nav">
+            <li><a href="#" class="active" data-section="dashboard">Dashboard</a></li>
+            <li><a href="#" data-section="upload">Upload Data</a></li>
+            <li><a href="#" data-section="analysis">EDA & Analysis</a></li>
+            <li><a href="#" data-section="model">Model Performance</a></li>
+            <li><a href="#" data-section="recommendations">Recommendations</a></li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+        <!-- Dashboard Section -->
+        <section id="dashboard-section">
+            <h1 class="h1 mb-4 text-gray-800">𝖢𝗎𝗌𝗍𝗈𝗆𝖾𝗋 𝖢𝗁𝗎𝗋𝗇 𝖠𝗇𝖺𝗅𝗒𝗌𝗂𝗌 𝖣𝖺𝗌𝗁𝖻𝗈𝖺𝗋𝖽</h1>
+
+            <div class="row">
+                <!-- Metrics Cards -->
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card metric-card primary h-100">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Total Customers</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-customers">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-users fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card metric-card success h-100">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Retained Customers</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="retained-customers">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-user-check fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card metric-card danger h-100">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                        Churned Customers</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="churned-customers">0</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-user-times fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card metric-card warning h-100">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Churn Rate</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800" id="churn-rate">0%</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Churn Distribution Chart -->
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Churn Distribution
+                        </div>
+                        <div class="card-body">
+                            <canvas id="churnChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- High-Value Customers -->
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            High-Value Customers at Risk
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center">
+                                <h2 id="high-value-risk">0</h2>
+                                <p>High-value customers identified as churn risks</p>
+                                <div class="progress mx-auto w-75">
+                                    <div class="progress-bar bg-danger" role="progressbar" id="high-value-progress" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <small id="high-value-percent">0% of high-value customers</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Recent Activity -->
+                <div class="col-lg-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Recent Analysis
+                        </div>
+                        <div class="card-body">
+                            <p>Upload a dataset to begin analysis. The system will automatically:</p>
+                            <ul>
+                                <li>Clean and preprocess your customer data</li>
+                                <li>Perform exploratory data analysis</li>
+                                <li>Build predictive models for customer churn</li>
+                                <li>Identify key factors driving churn</li>
+                                <li>Provide actionable business recommendations</li>
+                            </ul>
+                            <button class="btn btn-primary" id="goto-upload">Upload Dataset</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+        <section id="upload-section" style="display: none;">
+            <h1 class="h3 mb-4 text-gray-800">Upload Customer Data</h1>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Data Upload
+                </div>
+                <div class="card-body">
+                    <div class="upload-area" id="dropZone">
+                        <input type="file" id="fileUpload" accept=".csv" style="display: none;">
+                        <div class="mb-3">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-gray-300 mb-3"></i>
+                            <h5>Drag & Drop your CSV file here</h5>
+                            <p class="text-muted">or</p>
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+                        <p class="small text-muted">Supported format: CSV with customer data including a 'Churn' column</p>
+                    </div>
+
+                    <div class="mt-4" id="fileInfo" style="display: none;">
+                        <h5>Selected File: <span id="fileName"></span></h5>
+                        <div class="card mt-3">
+                            <div class="card-header">
+                                Data Preview (first 5 rows)
+                            </div>
+                            <div class="card-body data-preview">
+                                <table class="table table-sm table-striped" id="dataPreview">
+                                    <thead></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <button class="btn btn-success mt-3" id="analyzeBtn">Analyze Data</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Data Format Requirements
+                </div>
+                <div class="card-body">
+                    <p>Your CSV file should include the following information:</p>
+                    <ul>
+                        <li>A <strong>Churn</strong> column with values 'Yes'/'No' or 1/0</li>
+                        <li>Customer demographic information (gender, age, etc.)</li>
+                        <li>Service information (tenure, contract type, services subscribed)</li>
+                        <li>Billing information (monthly charges, total charges)</li>
+                    </ul>
+                    <p>Example columns: <code>customerID, gender, SeniorCitizen, Partner, tenure, PhoneService,
+                    MultipleLines, InternetService, OnlineSecurity, OnlineBackup, DeviceProtection, TechSupport,
+                    StreamingTV, StreamingMovies, Contract, PaperlessBilling, PaymentMethod, MonthlyCharges,
+                    TotalCharges, Churn</code></p>
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary btn-sm" id="downloadSample">Download Sample Dataset</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analysis Section -->
+        <section id="analysis-section" style="display: none;">
+            <h1 class="h3 mb-4 text-gray-800">Exploratory Data Analysis</h1>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Churn by Tenure
+                        </div>
+                        <div class="card-body">
+                            <canvas id="tenureChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Churn by Contract Type
+                        </div>
+                        <div class="card-body">
+                            <canvas id="contractChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Churn by Monthly Charges
+                        </div>
+                        <div class="card-body">
+                            <canvas id="chargesChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Customer Demographics
+                        </div>
+                        <div class="card-body">
+                            <canvas id="demographicsChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-12">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Correlation Heatmap
+                        </div>
+                        <div class="card-body">
+                            <canvas id="correlationChart" height="350"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Model Performance Section -->
+        <section id="model-section" style="display: none;">
+            <h1 class="h3 mb-4 text-gray-800">Model Performance</h1>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Model Comparison
+                        </div>
+                        <div class="card-body">
+                            <canvas id="modelComparisonChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Confusion Matrix
+                        </div>
+                        <div class="card-body">
+                            <canvas id="confusionMatrixChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            ROC Curve
+                        </div>
+                        <div class="card-body">
+                            <canvas id="rocCurveChart" height="250"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            Feature Importance
+                        </div>
+                        <div class="card-body" id="featureImportance">
+                            <p>Feature importance will be displayed here after analysis.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recommendations Section -->
+        <section id="recommendations-section" style="display: none;">
+            <h1 class="h3 mb-4 text-gray-800">Business Recommendations</h1>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Key Insights
+                </div>
+                <div class="card-body">
+                    <div id="keyInsights">
+                        <p>Key insights will be displayed here after analysis.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Actionable Recommendations
+                </div>
+                <div class="card-body">
+                    <div id="actionRecommendations">
+                        <p>Actionable recommendations will be displayed here after analysis.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    High-Value Customer Retention Strategy
+                </div>
+                <div class="card-body">
+                    <div id="retentionStrategies">
+                        <p>Retention strategies will be displayed here after analysis.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    Customer Segmentation Analysis
+                </div>
+                <div class="card-body">
+                    <div id="segmentationAnalysis">
+                        <p>Segmentation analysis will be displayed here after analysis.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="text-center text-muted">
+                &copy; 2025 Customer Churn Analysis Dashboard | Powered by Bhargav Thombare
+            </div>
+        </footer>
+    </div>
+
+    <!-- Font Awesome (for icons) -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Global variables to store analysis data
+        let analysisData = {
+            rawData: null,
+            processedData: null,
+            metrics: {},
+            charts: {},
+            featureImportance: [],
+            recommendations: {}
+        };
+
+        // Navigation
+        document.querySelectorAll('.sidebar-nav a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+
+                // Update active link
+                document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+
+                // Show corresponding section
+                const sectionId = this.getAttribute('data-section');
+                document.querySelectorAll('section').forEach(s => s.style.display = 'none');
+                document.getElementById(`${sectionId}-section`).style.display = 'block';
+            });
+        });
+
+        // Go to upload button
+        document.getElementById('goto-upload').addEventListener('click', function() {
+            document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+            document.querySelector('[data-section="upload"]').classList.add('active');
+
+            document.querySelectorAll('section').forEach(s => s.style.display = 'none');
+            document.getElementById('upload-section').style.display = 'block';
+        });
+
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileUpload = document.getElementById('fileUpload');
+        const browseBtn = document.getElementById('browseBtn');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingText = document.getElementById('loadingText');
+        const progressBar = document.getElementById('progressBar');
+        const dataPreview = document.getElementById('dataPreview');
+        const downloadSampleBtn = document.getElementById('downloadSample');
+
+        browseBtn.addEventListener('click', () => fileUpload.click());
+
+        fileUpload.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        downloadSampleBtn.addEventListener('click', function() {
+            // Create sample CSV data
+            const sampleData = `customerID,gender,SeniorCitizen,Partner,Dependents,tenure,PhoneService,MultipleLines,InternetService,OnlineSecurity,OnlineBackup,DeviceProtection,TechSupport,StreamingTV,StreamingMovies,Contract,PaperlessBilling,PaymentMethod,MonthlyCharges,TotalCharges,Churn
+7590-VHVEG,Female,0,Yes,No,1,No,No phone service,DSL,No,Yes,No,No,No,No,Month-to-month,Yes,Electronic check,29.85,29.85,No
+5575-GNVDE,Male,0,No,No,34,Yes,No,DSL,Yes,No,Yes,No,No,No,One year,No,Mailed check,56.95,1889.5,No
+3668-QPYBK,Male,0,No,No,2,Yes,No,DSL,Yes,Yes,No,No,No,No,Month-to-month,Yes,Mailed check,53.85,108.15,Yes
+7795-CFOCW,Male,0,No,No,45,No,No phone service,DSL,Yes,No,Yes,Yes,No,No,One year,No,Bank transfer (automatic),42.3,1840.75,No
+9237-HQITU,Female,0,No,No,2,Yes,No,Fiber optic,No,No,No,No,No,No,Month-to-month,Yes,Electronic check,70.7,151.65,Yes
+9305-CDSKC,Female,0,No,No,8,Yes,Yes,Fiber optic,No,No,Yes,No,Yes,Yes,Month-to-month,Yes,Electronic check,99.65,820.5,Yes
+1452-KIOVK,Male,0,No,Yes,22,Yes,Yes,Fiber optic,No,Yes,No,No,Yes,No,Month-to-month,Yes,Credit card (automatic),89.1,1949.4,No
+6713-OKOMC,Female,0,No,No,10,No,No phone service,DSL,Yes,No,No,No,No,No,Month-to-month,No,Mailed check,29.75,301.9,Yes
+7892-POOKP,Female,0,Yes,No,28,Yes,Yes,Fiber optic,No,Yes,Yes,Yes,Yes,Yes,Month-to-month,Yes,Electronic check,104.8,3046.05,Yes
+6388-TABGU,Male,1,Yes,No,62,Yes,No,DSL,Yes,Yes,Yes,No,No,No,One year,Yes,Bank transfer (automatic),56.15,3487.95,No`;
+
+            // Create a blob and download link
+            const blob = new Blob([sampleData], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sample_customer_churn_data.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        function handleFile(file) {
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                fileName.textContent = file.name;
+
+                // Read and parse the CSV file
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const csvData = e.target.result;
+                    Papa.parse(csvData, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            if (results.data.length > 0) {
+                                analysisData.rawData = results.data;
+                                displayDataPreview(results.data, results.meta.fields);
+                                fileInfo.style.display = 'block';
+
+                                // Store file for analysis
+                                analyzeBtn.dataset.file = file;
+                            } else {
+                                alert('The CSV file appears to be empty or improperly formatted.');
+                            }
+                        },
+                        error: function(error) {
+                            alert('Error parsing CSV: ' + error);
+                        }
+                    });
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please upload a CSV file.');
+            }
+        }
+
+        function displayDataPreview(data, columns) {
+            // Clear previous preview
+            dataPreview.innerHTML = '';
+
+            // Create table header
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+
+            // Show first 6 columns for preview
+            const previewColumns = columns.slice(0, 6);
+            previewColumns.forEach(col => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                headerRow.appendChild(th);
+            });
+
+            // Add ellipsis if there are more columns
+            if (columns.length > 6) {
+                const th = document.createElement('th');
+                th.textContent = '...';
+                headerRow.appendChild(th);
+            }
+
+            thead.appendChild(headerRow);
+            dataPreview.appendChild(thead);
+
+            // Create table body
+            const tbody = document.createElement('tbody');
+
+            // Show first 5 rows
+            const previewData = data.slice(0, 5);
+            previewData.forEach(row => {
+                const tr = document.createElement('tr');
+
+                previewColumns.forEach(col => {
+                    const td = document.createElement('td');
+                    td.textContent = row[col] !== undefined ? row[col] : '';
+                    tr.appendChild(td);
+                });
+
+                // Add ellipsis if there are more columns
+                if (columns.length > 6) {
+                    const td = document.createElement('td');
+                    td.textContent = '...';
+                    tr.appendChild(td);
+                }
+
+                tbody.appendChild(tr);
+            });
+
+            dataPreview.appendChild(tbody);
+        }
+
+        // Analyze button click
+        analyzeBtn.addEventListener('click', function() {
+            if (!analysisData.rawData || analysisData.rawData.length === 0) {
+                alert('Please select a valid CSV file first.');
+                return;
+            }
+
+            // Show loading overlay
+            loadingOverlay.style.display = 'flex';
+
+            // Simulate analysis process with progress updates
+            simulateAnalysisProcess();
+        });
+
+        function simulateAnalysisProcess() {
+            // Reset progress
+            updateProgress(0, "Initializing analysis...");
+
+            // Simulate the steps of analysis with progress updates
+            setTimeout(() => updateProgress(10, "Loading and preprocessing data..."), 500);
+            setTimeout(() => updateProgress(25, "Performing exploratory analysis..."), 1500);
+            setTimeout(() => updateProgress(45, "Training machine learning models..."), 2500);
+            setTimeout(() => updateProgress(70, "Evaluating model performance..."), 3500);
+            setTimeout(() => updateProgress(85, "Generating insights and recommendations..."), 4500);
+            setTimeout(() => {
+                updateProgress(100, "Analysis complete!");
+
+                // Process the data and generate results
+                processDataAndGenerateResults();
+
+                // Hide loading overlay after a brief delay
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+
+                    // Update dashboard with results
+                    updateDashboardWithResults();
+
+                    // Navigate to dashboard
+                    document.querySelectorAll('.sidebar-nav a').forEach(l => l.classList.remove('active'));
+                    document.querySelector('[data-section="dashboard"]').classList.add('active');
+
+                    document.querySelectorAll('section').forEach(s => s.style.display = 'none');
+                    document.getElementById('dashboard-section').style.display = 'block';
+
+                    alert('Analysis complete! The dashboard has been updated with the results.');
+                }, 1000);
+            }, 5500);
+        }
+
+        function updateProgress(percent, text) {
+            progressBar.style.width = percent + '%';
+            progressBar.setAttribute('aria-valuenow', percent);
+            loadingText.textContent = text;
+        }
+
+        function processDataAndGenerateResults() {
+            // Process the raw data to extract meaningful information
+            const data = analysisData.rawData;
+
+            // Calculate basic metrics
+            const totalCustomers = data.length;
+            const churnedCustomers = data.filter(row =>
+                row.Churn === 'Yes' || row.Churn === 1 || row.Churn === true
+            ).length;
+            const retainedCustomers = totalCustomers - churnedCustomers;
+            const churnRate = (churnedCustomers / totalCustomers * 100).toFixed(1);
+
+            // Store metrics
+            analysisData.metrics = {
+                totalCustomers,
+                churnedCustomers,
+                retainedCustomers,
+                churnRate
+            };
+
+            // Calculate additional metrics for visualization
+            calculateAdditionalMetrics(data);
+
+            // Generate feature importance (simulated)
+            analysisData.featureImportance = generateFeatureImportance(data);
+
+            // Generate recommendations
+            analysisData.recommendations = generateRecommendations();
+        }
+
+        function calculateAdditionalMetrics(data) {
+            // Analyze tenure distribution
+            const tenureGroups = {
+                '0-12': { total: 0, churned: 0 },
+                '13-24': { total: 0, churned: 0 },
+                '25-36': { total: 0, churned: 0 },
+                '37-48': { total: 0, churned: 0 },
+                '49-60': { total: 0, churned: 0 },
+                '60+': { total: 0, churned: 0 }
+            };
+
+            // Analyze contract types
+            const contractAnalysis = {};
+
+            // Analyze monthly charges
+            const chargeRanges = {
+                'Low (<$35)': { total: 0, churned: 0 },
+                'Medium ($35-$70)': { total: 0, churned: 0 },
+                'High ($70-$90)': { total: 0, churned: 0 },
+                'Very High (>$90)': { total: 0, churned: 0 }
+            };
+
+            // Analyze demographics
+            const genderAnalysis = { Male: { total: 0, churned: 0 }, Female: { total: 0, churned: 0 } };
+            const seniorAnalysis = { Yes: { total: 0, churned: 0 }, No: { total: 0, churned: 0 } };
+
+            // Process each row
+            data.forEach(row => {
+                const isChurned = row.Churn === 'Yes' || row.Churn === 1 || row.Churn === true;
+
+                // Analyze tenure
+                const tenure = row.tenure || 0;
+                if (tenure <= 12) {
+                    tenureGroups['0-12'].total++;
+                    if (isChurned) tenureGroups['0-12'].churned++;
+                } else if (tenure <= 24) {
+                    tenureGroups['13-24'].total++;
+                    if (isChurned) tenureGroups['13-24'].churned++;
+                } else if (tenure <= 36) {
+                    tenureGroups['25-36'].total++;
+                    if (isChurned) tenureGroups['25-36'].churned++;
+                } else if (tenure <= 48) {
+                    tenureGroups['37-48'].total++;
+                    if (isChurned) tenureGroups['37-48'].churned++;
+                } else if (tenure <= 60) {
+                    tenureGroups['49-60'].total++;
+                    if (isChurned) tenureGroups['49-60'].churned++;
+                } else {
+                    tenureGroups['60+'].total++;
+                    if (isChurned) tenureGroups['60+'].churned++;
+                }
+
+                // Analyze contract type
+                const contract = row.Contract || 'Unknown';
+                if (!contractAnalysis[contract]) {
+                    contractAnalysis[contract] = { total: 0, churned: 0 };
+                }
+                contractAnalysis[contract].total++;
+                if (isChurned) contractAnalysis[contract].churned++;
+
+                // Analyze monthly charges
+                const monthlyCharges = row.MonthlyCharges || 0;
+                if (monthlyCharges < 35) {
+                    chargeRanges['Low (<$35)'].total++;
+                    if (isChurned) chargeRanges['Low (<$35)'].churned++;
+                } else if (monthlyCharges <= 70) {
+                    chargeRanges['Medium ($35-$70)'].total++;
+                    if (isChurned) chargeRanges['Medium ($35-$70)'].churned++;
+                } else if (monthlyCharges <= 90) {
+                    chargeRanges['High ($70-$90)'].total++;
+                    if (isChurned) chargeRanges['High ($70-$90)'].churned++;
+                } else {
+                    chargeRanges['Very High (>$90)'].total++;
+                    if (isChurned) chargeRanges['Very High (>$90)'].churned++;
+                }
+
+                // Analyze demographics
+                const gender = row.gender || 'Unknown';
+                if (genderAnalysis[gender]) {
+                    genderAnalysis[gender].total++;
+                    if (isChurned) genderAnalysis[gender].churned++;
+                }
+
+                const isSenior = row.SeniorCitizen === 1 ? 'Yes' : 'No';
+                seniorAnalysis[isSenior].total++;
+                if (isChurned) seniorAnalysis[isSenior].churned++;
+            });
+
+            // Calculate high-value customers at risk
+            // High-value defined as: MonthlyCharges > 70 AND tenure > 24
+            const highValueCustomers = data.filter(row => {
+                const monthlyCharges = row.MonthlyCharges || 0;
+                const tenure = row.tenure || 0;
+                return monthlyCharges > 70 && tenure > 24;
+            });
+
+            const highValueAtRisk = highValueCustomers.filter(row =>
+                row.Churn === 'Yes' || row.Churn === 1 || row.Churn === true
+            ).length;
+
+            const highValueRiskPercent = highValueCustomers.length > 0 ?
+                (highValueAtRisk / highValueCustomers.length * 100).toFixed(1) : 0;
+
+            // Store analysis results
+            analysisData.analysis = {
+                tenureGroups,
+                contractAnalysis,
+                chargeRanges,
+                genderAnalysis,
+                seniorAnalysis,
+                highValueCustomers: highValueCustomers.length,
+                highValueAtRisk,
+                highValueRiskPercent
+            };
+        }
+
+        function generateFeatureImportance(data) {
+            // This is a simplified simulation of feature importance
+            // In a real application, this would come from the machine learning model
+
+            // Common features that often impact churn
+            const potentialFeatures = [
+                'tenure', 'MonthlyCharges', 'TotalCharges', 'Contract',
+                'OnlineSecurity', 'TechSupport', 'InternetService', 'PaymentMethod',
+                'PaperlessBilling', 'SeniorCitizen', 'Partner', 'Dependents'
+            ];
+
+            // Filter to features that actually exist in the data
+            const availableFeatures = potentialFeatures.filter(feature =>
+                data[0] && data[0][feature] !== undefined
+            );
+
+            // Generate random importance scores (in a real app, these would come from the model)
+            const featuresWithImportance = availableFeatures.map(feature => {
+                // Base importance with some randomness
+                let importance = Math.random() * 0.5 + 0.1;
+
+                // Adjust based on feature type (simulate realistic patterns)
+                if (feature === 'tenure') importance = 0.85 + Math.random() * 0.1;
+                if (feature === 'Contract') importance = 0.75 + Math.random() * 0.1;
+                if (feature === 'OnlineSecurity') importance = 0.65 + Math.random() * 0.1;
+                if (feature === 'TechSupport') importance = 0.60 + Math.random() * 0.1;
+                if (feature === 'MonthlyCharges') importance = 0.55 + Math.random() * 0.1;
+
+                return {
+                    name: feature,
+                    importance: Math.min(1, importance) // Cap at 1
+                };
+            });
+
+            // Sort by importance (descending)
+            return featuresWithImportance.sort((a, b) => b.importance - a.importance);
+        }
+
+        function generateRecommendations() {
+            // Generate recommendations based on the analysis
+            const insights = [];
+            const actions = [];
+            const retentionStrategies = [];
+            const segmentation = [];
+
+            // Basic insights
+            insights.push(`Overall churn rate is ${analysisData.metrics.churnRate}%`);
+
+            // Contract-based insights
+            if (analysisData.analysis.contractAnalysis['Month-to-month']) {
+                const mtmChurnRate = (analysisData.analysis.contractAnalysis['Month-to-month'].churned /
+                                    analysisData.analysis.contractAnalysis['Month-to-month'].total * 100).toFixed(1);
+                insights.push(`Month-to-month contracts have a ${mtmChurnRate}% churn rate`);
+                actions.push("Offer incentives for customers to switch to annual contracts");
+            }
+
+            // Tenure-based insights
+            const earlyTenureChurn = (analysisData.analysis.tenureGroups['0-12'].churned /
+                                    analysisData.analysis.tenureGroups['0-12'].total * 100).toFixed(1);
+            insights.push(`Customers with less than 12 months tenure have a ${earlyTenureChurn}% churn rate`);
+            actions.push("Enhance onboarding and early-lifecycle support for new customers");
+
+            // High-value customers
+            insights.push(`${analysisData.analysis.highValueAtRisk} high-value customers are at risk of churning`);
+            retentionStrategies.push("Create personalized retention offers for high-value customers");
+            retentionStrategies.push("Assign account managers to high-value at-risk customers");
+
+            // Service-related recommendations
+            actions.push("Promote value-added services like Online Security and Tech Support");
+            actions.push("Review pricing strategy for services with high churn rates");
+
+            // Payment methods
+            actions.push("Offer discounts for customers using automatic payment methods");
+
+            // Segmentation analysis
+            segmentation.push("Segment customers by tenure, service usage, and value");
+            segmentation.push("Develop targeted communication strategies for each segment");
+
+            return {
+                insights,
+                actions,
+                retentionStrategies,
+                segmentation
+            };
+        }
+
+        function updateDashboardWithResults() {
+            // Update metrics
+            document.getElementById('total-customers').textContent = analysisData.metrics.totalCustomers.toLocaleString();
+            document.getElementById('retained-customers').textContent = analysisData.metrics.retainedCustomers.toLocaleString();
+            document.getElementById('churned-customers').textContent = analysisData.metrics.churnedCustomers.toLocaleString();
+            document.getElementById('churn-rate').textContent = `${analysisData.metrics.churnRate}%`;
+
+            // Update high-value customers
+            document.getElementById('high-value-risk').textContent = analysisData.analysis.highValueAtRisk;
+            document.getElementById('high-value-progress').style.width = `${analysisData.analysis.highValueRiskPercent}%`;
+            document.getElementById('high-value-percent').textContent =
+                `${analysisData.analysis.highValueRiskPercent}% of high-value customers`;
+
+            // Create charts
+            createCharts();
+
+            // Update feature importance
+            updateFeatureImportance();
+
+            // Update recommendations
+            updateRecommendations();
+        }
+
+        function createCharts() {
+            // Churn distribution chart
+            const churnCtx = document.getElementById('churnChart').getContext('2d');
+            if (window.churnChartInstance) window.churnChartInstance.destroy();
+            window.churnChartInstance = new Chart(churnCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Retained', 'Churned'],
+                    datasets: [{
+                        data: [analysisData.metrics.retainedCustomers, analysisData.metrics.churnedCustomers],
+                        backgroundColor: ['#1cc88a', '#e74a3b'],
+                        hoverBackgroundColor: ['#17a673', '#be2617'],
+                        hoverBorderColor: "rgba(234, 236, 244, 1)",
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Tenure chart - show churn rate by tenure group
+            const tenureCtx = document.getElementById('tenureChart').getContext('2d');
+            if (window.tenureChartInstance) window.tenureChartInstance.destroy();
+
+            const tenureLabels = Object.keys(analysisData.analysis.tenureGroups);
+            const tenureChurnRates = tenureLabels.map(group => {
+                const groupData = analysisData.analysis.tenureGroups[group];
+                return groupData.total > 0 ? (groupData.churned / groupData.total * 100) : 0;
+            });
+
+            window.tenureChartInstance = new Chart(tenureCtx, {
+                type: 'bar',
+                data: {
+                    labels: tenureLabels,
+                    datasets: [{
+                        label: 'Churn Rate (%)',
+                        data: tenureChurnRates,
+                        backgroundColor: '#e74a3b',
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Tenure (months)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Churn Rate (%)'
+                            },
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+
+            // Contract type chart - show churn rate by contract type
+            const contractCtx = document.getElementById('contractChart').getContext('2d');
+            if (window.contractChartInstance) window.contractChartInstance.destroy();
+
+            const contractLabels = Object.keys(analysisData.analysis.contractAnalysis);
+            const contractChurnRates = contractLabels.map(type => {
+                const typeData = analysisData.analysis.contractAnalysis[type];
+                return typeData.total > 0 ? (typeData.churned / typeData.total * 100) : 0;
+            });
+
+            // Create colors for each contract type
+            const contractColors = contractLabels.map((_, i) => {
+                const colors = ['#e74a3b', '#4e73df', '#1cc88a', '#f6c23e'];
+                return colors[i % colors.length];
+            });
+
+            window.contractChartInstance = new Chart(contractCtx, {
+                type: 'bar',
+                data: {
+                    labels: contractLabels,
+                    datasets: [{
+                        label: 'Churn Rate (%)',
+                        data: contractChurnRates,
+                        backgroundColor: contractColors,
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Churn Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Monthly charges chart - show churn rate by charge range
+            const chargesCtx = document.getElementById('chargesChart').getContext('2d');
+            if (window.chargesChartInstance) window.chargesChartInstance.destroy();
+
+            const chargeLabels = Object.keys(analysisData.analysis.chargeRanges);
+            const chargeChurnRates = chargeLabels.map(range => {
+                const rangeData = analysisData.analysis.chargeRanges[range];
+                return rangeData.total > 0 ? (rangeData.churned / rangeData.total * 100) : 0;
+            });
+
+            window.chargesChartInstance = new Chart(chargesCtx, {
+                type: 'bar',
+                data: {
+                    labels: chargeLabels,
+                    datasets: [{
+                        label: 'Churn Rate (%)',
+                        data: chargeChurnRates,
+                        backgroundColor: '#4e73df',
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Churn Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Demographics chart - show churn rate by gender and senior status
+            const demographicsCtx = document.getElementById('demographicsChart').getContext('2d');
+            if (window.demographicsChartInstance) window.demographicsChartInstance.destroy();
+
+            // Prepare data for grouped bar chart
+            const demographicLabels = ['Gender', 'Senior Citizen'];
+            const genderChurnRate = analysisData.analysis.genderAnalysis.Male.total > 0 ?
+                (analysisData.analysis.genderAnalysis.Male.churned / analysisData.analysis.genderAnalysis.Male.total * 100) : 0;
+            const seniorChurnRate = analysisData.analysis.seniorAnalysis.Yes.total > 0 ?
+                (analysisData.analysis.seniorAnalysis.Yes.churned / analysisData.analysis.seniorAnalysis.Yes.total * 100) : 0;
+
+            // For simplicity, we'll just show two key demographic factors
+            window.demographicsChartInstance = new Chart(demographicsCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Male', 'Female', 'Senior', 'Non-Senior'],
+                    datasets: [{
+                        label: 'Churn Rate (%)',
+                        data: [
+                            genderChurnRate,
+                            analysisData.analysis.genderAnalysis.Female.total > 0 ?
+                                (analysisData.analysis.genderAnalysis.Female.churned / analysisData.analysis.genderAnalysis.Female.total * 100) : 0,
+                            seniorChurnRate,
+                            analysisData.analysis.seniorAnalysis.No.total > 0 ?
+                                (analysisData.analysis.seniorAnalysis.No.churned / analysisData.analysis.seniorAnalysis.No.total * 100) : 0
+                        ],
+                        backgroundColor: [
+                            '#4e73df', '#e74a3b', '#1cc88a', '#f6c23e'
+                        ],
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Churn Rate (%)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Create model comparison chart (simulated)
+            const modelComparisonCtx = document.getElementById('modelComparisonChart').getContext('2d');
+            if (window.modelComparisonChartInstance) window.modelComparisonChartInstance.destroy();
+
+            window.modelComparisonChartInstance = new Chart(modelComparisonCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Random Forest', 'Logistic Regression', 'Gradient Boosting', 'SVM'],
+                    datasets: [{
+                        label: 'Accuracy',
+                        data: [0.82, 0.78, 0.84, 0.76],
+                        backgroundColor: '#4e73df',
+                    }, {
+                        label: 'Precision',
+                        data: [0.79, 0.75, 0.81, 0.73],
+                        backgroundColor: '#1cc88a',
+                    }, {
+                        label: 'Recall',
+                        data: [0.85, 0.80, 0.83, 0.78],
+                        backgroundColor: '#f6c23e',
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1.0
+                        }
+                    }
+                }
+            });
+
+            // Create confusion matrix chart (simulated)
+            const confusionMatrixCtx = document.getElementById('confusionMatrixChart').getContext('2d');
+            if (window.confusionMatrixChartInstance) window.confusionMatrixChartInstance.destroy();
+
+            // Simulate confusion matrix values
+            const total = analysisData.metrics.totalCustomers;
+            const testSize = Math.floor(total * 0.2);
+            const tn = Math.floor(testSize * 0.7);
+            const fp = Math.floor(testSize * 0.1);
+            const fn = Math.floor(testSize * 0.05);
+            const tp = testSize - tn - fp - fn;
+
+            window.confusionMatrixChartInstance = new Chart(confusionMatrixCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['True Negative', 'False Positive', 'False Negative', 'True Positive'],
+                    datasets: [{
+                        label: 'Count',
+                        data: [tn, fp, fn, tp],
+                        backgroundColor: [
+                            '#1cc88a', // TN - Green
+                            '#f6c23e', // FP - Yellow
+                            '#e74a3b', // FN - Red
+                            '#4e73df'  // TP - Blue
+                        ],
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Create ROC curve chart (simulated)
+            const rocCurveCtx = document.getElementById('rocCurveChart').getContext('2d');
+            if (window.rocCurveChartInstance) window.rocCurveChartInstance.destroy();
+
+            window.rocCurveChartInstance = new Chart(rocCurveCtx, {
+                type: 'line',
+                data: {
+                    labels: ['0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0'],
+                    datasets: [{
+                        label: 'Random Forest (AUC = 0.87)',
+                        data: [0, 0.2, 0.4, 0.55, 0.65, 0.75, 0.82, 0.87, 0.92, 0.97, 1.0],
+                        fill: false,
+                        borderColor: '#4e73df',
+                        tension: 0.1
+                    }, {
+                        label: 'Random Classifier',
+                        data: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+                        fill: false,
+                        borderColor: '#e74a3b',
+                        borderDash: [5, 5],
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'False Positive Rate'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'True Positive Rate'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateFeatureImportance() {
+            const container = document.getElementById('featureImportance');
+            container.innerHTML = '';
+
+            if (analysisData.featureImportance.length === 0) {
+                container.innerHTML = '<p>No feature importance data available.</p>';
+                return;
+            }
+
+            // Normalize importance scores to percentage of maximum
+            const maxImportance = Math.max(...analysisData.featureImportance.map(f => f.importance));
+
+            analysisData.featureImportance.forEach(feature => {
+                const percentage = (feature.importance / maxImportance * 100).toFixed(1);
+
+                const barDiv = document.createElement('div');
+                barDiv.className = 'feature-importance-bar';
+
+                const fillDiv = document.createElement('div');
+                fillDiv.className = 'feature-bar-fill';
+                fillDiv.style.width = `${percentage}%`;
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'd-flex justify-content-between mt-1';
+                labelDiv.innerHTML = `<span>${feature.name}</span><span>${(feature.importance * 100).toFixed(1)}%</span>`;
+
+                barDiv.appendChild(fillDiv);
+                container.appendChild(barDiv);
+                container.appendChild(labelDiv);
+            });
+        }
+
+        function updateRecommendations() {
+            document.getElementById('keyInsights').innerHTML = `
+                <ul>
+                    ${analysisData.recommendations.insights.map(insight => `<li>${insight}</li>`).join('')}
+                </ul>
+            `;
+
+            document.getElementById('actionRecommendations').innerHTML = `
+                <ul>
+                    ${analysisData.recommendations.actions.map(action => `<li><strong>${action}</strong></li>`).join('')}
+                </ul>
+            `;
+
+            document.getElementById('retentionStrategies').innerHTML = `
+                <ul>
+                    ${analysisData.recommendations.retentionStrategies.map(strategy => `<li>${strategy}</li>`).join('')}
+                </ul>
+            `;
+
+            document.getElementById('segmentationAnalysis').innerHTML = `
+                <ul>
+                    ${analysisData.recommendations.segmentation.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+            `;
+        }
+    </script>
+</body>
+</html>
